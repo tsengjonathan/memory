@@ -1,0 +1,16 @@
+<script>
+ window.gameName = "<%= @name %>";
+</script>
+
+<div class="row">
+  <div class="column">
+    <h1>Memory Game: <%= @name %></h1>
+  </div>
+</div>
+<div class="row">
+  <div class="column">
+    <div id="root">
+      React component loading...
+    </div>
+  </div>
+</div>

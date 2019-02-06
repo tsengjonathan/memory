@@ -2,117 +2,44 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import _ from 'lodash';
 
-export default function game_init(root) {
-  ReactDOM.render(<MemoryGame />, root);
-}
-
-const constTiles = [
-  {isOpen: false, isSolved: false, label: 'A'},
-  {isOpen: false, isSolved: false, label: 'A'},
-  {isOpen: false, isSolved: false, label: 'B'},
-  {isOpen: false, isSolved: false, label: 'B'},
-  {isOpen: false, isSolved: false, label: 'C'},
-  {isOpen: false, isSolved: false, label: 'C'},
-  {isOpen: false, isSolved: false, label: 'D'},
-  {isOpen: false, isSolved: false, label: 'D'},
-  {isOpen: false, isSolved: false, label: 'E'},
-  {isOpen: false, isSolved: false, label: 'E'},
-  {isOpen: false, isSolved: false, label: 'F'},
-  {isOpen: false, isSolved: false, label: 'F'},
-  {isOpen: false, isSolved: false, label: 'G'},
-  {isOpen: false, isSolved: false, label: 'G'},
-  {isOpen: false, isSolved: false, label: 'H'},
-  {isOpen: false, isSolved: false, label: 'H'}
-]
-
-// function is attributed to the following website:
-// https://stackoverflow.com/questions/2450954/how-to-randomize-shuffle-a-javascript-array
-function randomizeOrder(array) {
-  var currentIndex = array.length, temporaryValue, randomIndex;
-
-  // While there remain elements to shuffle...
-  while (0 !== currentIndex) {
-
-    // Pick a remaining element...
-    randomIndex = Math.floor(Math.random() * currentIndex);
-    currentIndex -= 1;
-
-    // And swap it with the current element.
-    temporaryValue = array[currentIndex];
-    array[currentIndex] = array[randomIndex];
-    array[randomIndex] = temporaryValue;
-  }
-
-  array.map((e, idx) => {
-    e.index = idx;
-  })
-
-  return array;
+export default function game_init(root, channel) {
+  ReactDOM.render(<MemoryGame channel={channel} />, root);
 }
 
 class MemoryGame extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { 
-      tiles: randomizeOrder(this.copyArray(constTiles)),
-      pair: [],
-      solved: 0,
-      clicks: 0 
+
+    this.state = {
+      clicks: 0,
+      tiles: [],
+      log: []
+    }
+
+    this.channel = props.channel;
+    this.channel
+    .join()
+    .receive("ok", this.got_view.bind(this))
+    .receive("error", resp => { console.log("Unable to join", resp); });
+  }
+
+  got_view(view) {
+    console.log("View", view)
+    this.setState(view.game)
+
+    if (view.game.log.length == 2 && view.game.log[0] !== null) {
+      setTimeout(() => this.channel.push("close", {}).receive("ok", this.got_view.bind(this)), 1000)
     }
   }
 
-  handleTile(tileIdx) {
-    if (this.state.pair.length < 2) {
-      this.openTile(tileIdx);
-      this.checkPair();
+  handleTile(idx) {
+    if (this.state.log.length < 2) {
+      this.channel.push("flip", {card: idx}).receive("ok", this.got_view.bind(this))
     }
   }
 
-  openTile(tileIdx) {
-    let tiles = this.state.tiles;
-    const btnState = !tiles[tileIdx].isOpen;
-    tiles[tileIdx].isOpen = btnState;
-    if (btnState) {
-      this.setState({ tiles: tiles, clicks: this.state.clicks + 1 });
-    } else {
-      this.setState({ tiles: tiles });
-    }
-    this.state.pair.push(tiles[tileIdx]);
-  }
-
-  solveTile(tileIdx) {
-    let tiles = this.state.tiles;
-    tiles[tileIdx].isSolved = !tiles[tileIdx].isSolved;
-    this.setState({ tiles: tiles });
-  }
-
-  checkPair() {
-    const pair = this.state.pair;
-
-    if (pair.length === 2) {
-      if (pair[0].label === pair[1].label) {
-        this.solveTile(pair[0].index);
-        this.solveTile(pair[1].index);
-        this.setState({ pair: [], solved: this.state.solved + 1 });
-      } else {
-        new Promise(resolve => setTimeout(resolve, 1000))
-        .then(closeAll => pair.map(e => this.openTile(e.index)))
-        .then(reset => this.setState({ pair: [] }))
-      }
-    }
-  }
-
-  reset() {
-    this.setState({ 
-      tiles: randomizeOrder(this.copyArray(constTiles)),
-      pair: [],
-      solved: 0,
-      clicks: 0 
-    });
-  }
-
-  copyArray(array) {
-    return array.map(e => Object.assign({}, e));
+  handleReset() {
+    this.channel.push("reset", {}).receive("ok", this.got_view.bind(this))
   }
 
   render() {
@@ -131,7 +58,7 @@ class MemoryGame extends React.Component {
             <div key={tileIdx} className="column">
             <p><button style={tile.isSolved ? {backgroundColor: 'grey'} : null} 
                     onClick={_ev => this.handleTile(rowIdx*4 + tileIdx)}>
-                    {tile.isOpen ? tile.label : ""}
+                    {tile.label}
             </button></p>
             </div>
           )}
@@ -143,7 +70,7 @@ class MemoryGame extends React.Component {
             Clicks: {this.state.clicks}
             </div>
             <div className="column" id="reset">
-            <button onClick={_ev => this.reset()}>Reset</button>
+            <button onClick={_ev => this.handleReset()}>Reset</button>
             </div>
           </div>
         </div>
